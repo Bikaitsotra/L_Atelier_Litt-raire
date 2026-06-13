@@ -37,7 +37,7 @@ app.use(express.json({ limit: "15mb" }));
 
 // Initialize GoogleGenAI SDK
 const apiKey = process.env.GEMINI_API_KEY;
-const ai = apiKey
+const ai = apiKey && apiKey !== "MY_GEMINI_API_KEY" && apiKey.trim() !== ""
   ? new GoogleGenAI({
       apiKey: apiKey,
       httpOptions: {
@@ -169,10 +169,89 @@ async function seedDefaultsToFirestore() {
       await batch.commit();
       console.log("[Firebase Admin] Legacy poet profiles successfully seeded to Firestore!");
     }
+    // Provisonner également le compte administrateur avec son mot de passe par défaut pour le serveur local
+    await seedAdminUser();
   } catch (err) {
     console.error("[Firebase Admin] Error seeding default profiles:", err);
   }
 }
+
+// Fonction de provisionnement du compte administrateur avec mot de passe par défaut
+async function seedAdminUser() {
+  const adminEmail = "johnbikaitsotra@gmail.com";
+  const defaultPassword = "plumeAdmin2026!";
+  try {
+    console.log(`[Firebase Admin] Vérification et provisionnement du compte admin (${adminEmail})...`);
+    
+    let userRecord;
+    try {
+      userRecord = await getAuth().getUserByEmail(adminEmail);
+      // Compte existant : on réinitialise son mot de passe pour faciliter la reconnexion locale
+      await getAuth().updateUser(userRecord.uid, {
+        password: defaultPassword,
+        displayName: "John Bikaitsotra"
+      });
+      console.log(`[Firebase Admin] Mot de passe admin réinitialisé par défaut à: "${defaultPassword}"`);
+    } catch (authErr: any) {
+      if (authErr.code === "auth/user-not-found") {
+        userRecord = await getAuth().createUser({
+          email: adminEmail,
+          password: defaultPassword,
+          displayName: "John Bikaitsotra",
+          emailVerified: true
+        });
+        console.log(`[Firebase Admin] Compte admin créé avec succès avec le mot de passe par défaut: "${defaultPassword}"`);
+      } else {
+        throw authErr;
+      }
+    }
+
+    // Provisionnement / Mise à jour dans la collection Firestore "users"
+    const userRef = db.collection("users").doc(adminEmail);
+    const userDoc = await userRef.get();
+    const userData = {
+      email: adminEmail,
+      displayName: "John Bikaitsotra",
+      penName: "Admin Plume",
+      createdAt: new Date().toISOString(),
+      uid: userRecord.uid,
+      isAdmin: true
+    };
+    if (!userDoc.exists) {
+      await userRef.set(userData);
+    } else {
+      await userRef.update({
+        uid: userRecord.uid,
+        isAdmin: true
+      });
+    }
+
+    // Provisionnement / Mise à jour dans la collection Firestore "profiles"
+    const profileRef = db.collection("profiles").doc(adminEmail);
+    const profileDoc = await profileRef.get();
+    if (!profileDoc.exists) {
+      await profileRef.set({
+        email: adminEmail,
+        displayName: "John Bikaitsotra",
+        penName: "Admin Plume",
+        bio: "Administrateur principal du Salon de l'Atelier Littéraire.",
+        avatarUrl: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200",
+        publishedWorks: [
+          { title: "Mes Vers du Soir", url: "https://example.com/vers-du-soir" }
+        ],
+        socials: {
+          twitter: "john_poete",
+          github: "johnb_dev"
+        }
+      });
+    }
+
+    console.log("[Firebase Admin] Synchronisation des données admin Firestore réussie.");
+  } catch (err) {
+    console.error("[Firebase Admin] Échec du provisionnement du compte administrateur:", err);
+  }
+}
+
 
 // REST Endpoints Connected Directly to Cloud Firestore (BFF Mode)
 
@@ -1171,8 +1250,13 @@ app.post("/api/ai/chat", async (req, res) => {
   const { messages, documentTitle, documentContent } = req.body;
 
   if (!ai) {
+    const isPlaceholder = process.env.GEMINI_API_KEY === "MY_GEMINI_API_KEY";
+    const missingReason = isPlaceholder 
+      ? "votre clé GEMINI_API_KEY est configurée avec la valeur d'exemple par défaut ('MY_GEMINI_API_KEY')"
+      : "aucune clé GEMINI_API_KEY n'est configurée dans l'environnement";
+    
     return res.json({
-      text: "Bonjour ! Je suis Plume, votre coéquipier poétique. (Le serveur tourne actuellement en mode local car la clé GEMINI_API_KEY n'est pas finalisée, mais je suis là pour vous inspirer !)\n\nQue dites-vous de travailler ensemble sur le rythme de votre texte ?"
+      text: `Bonjour ! Je suis Plume, votre compagnon littéraire.\n\nActuellement, je fonctionne en mode d'inspiration locale limité car ${missingReason}.\n\nPour me donner toute ma puissance créative sur votre serveur Docker, veuillez :\n1. Obtenir une clé d'API Gemini gratuite sur Google AI Studio.\n2. Configurer la variable d'environnement \`GEMINI_API_KEY\` avec votre clé réelle dans votre fichier \`.env\` ou vos paramètres Docker Compose.\n3. Redémarrer votre conteneur.\n\nEn attendant, écrivez librement et je reste disponible pour vous inspirer !`
     });
   }
 
@@ -1212,10 +1296,18 @@ Parle toujours en français, avec un ton bienveillant et élégant. Garde tes in
 
     res.json({ text: response.text });
   } catch (error: any) {
-    console.warn("Gemini Chat assistant failed, falling back to local inspiration message:", error?.message || error);
-    res.json({ 
-      text: "Bonjour ! Il semble que notre canal de communication direct avec Plume soit temporairement saturé en raison des limites de requêtes de l'API Gemini (quota dépassé). Pas de panique, je reste à vos côtés en mode d'inspiration locale ! \n\nContinuez d'écrire vos créations, et n'hésitez pas à me solliciter de nouveau dans quelques minutes." 
-    });
+    const errorMsg = error?.message || String(error);
+    console.warn("Gemini Chat assistant failed:", errorMsg);
+    
+    let userHelpfulMsg = "Bonjour ! Il semble que notre canal de communication direct avec Plume soit temporairement saturé en raison des limites de requêtes de l'API Gemini (quota dépassé). Pas de panique, je reste à vos côtés en mode d'inspiration locale ! \n\nContinuez d'écrire vos créations, et n'hésitez pas à me solliciter de nouveau dans quelques minutes.";
+    
+    if (errorMsg.includes("API key not valid") || errorMsg.includes("API_KEY_INVALID") || errorMsg.includes("key is invalid") || errorMsg.includes("API key")) {
+      userHelpfulMsg = "Bonjour ! Je suis Plume. Il s'avère que la clé d'API `GEMINI_API_KEY` configurée sur votre serveur local n'est pas reconnue ou est invalide.\n\nVeuillez vérifier la validité de votre clé créative Gemini dans votre fichier `.env` ou vos configurations Docker.";
+    } else if (errorMsg.includes("ENOTFOUND") || errorMsg.includes("EAI_AGAIN") || errorMsg.includes("connect ECONNREFUSED") || errorMsg.includes("fetch failed")) {
+      userHelpfulMsg = "Bonjour ! C'est Plume.\n\nJe n'ai pas pu me connecter aux serveurs Google Gemini (erreur de réseau ou DNS). Veuillez vérifier la connectivité Internet de votre conteneur Docker ou si un pare-feu/proxy bloque les connexions sortantes vers `generativelanguage.googleapis.com`.";
+    }
+    
+    res.json({ text: userHelpfulMsg });
   }
 });
 

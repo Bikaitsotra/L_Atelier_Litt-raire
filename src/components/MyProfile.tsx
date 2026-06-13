@@ -19,10 +19,17 @@ import {
   Trash2,
   ExternalLink,
   Award,
-  Sparkles
+  Sparkles,
+  Key
 } from "lucide-react";
 import { UserProfile, PublishedWork } from "../types";
 import { getProfilesFromFirestore, saveProfileToFirestore } from "../lib/firestoreService";
+import { 
+  updatePassword, 
+  reauthenticateWithCredential, 
+  EmailAuthProvider 
+} from "firebase/auth";
+import { auth } from "../firebase";
 
 interface MyProfileProps {
   currentUserEmail: string;
@@ -51,6 +58,66 @@ export default function MyProfile({ currentUserEmail, onProfileUpdated }: MyProf
   // Local state for adding a single published work
   const [numWorkTitle, setNumWorkTitle] = useState("");
   const [numWorkUrl, setNumWorkUrl] = useState("");
+
+  // Password change states
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [showPasswordFields, setShowPasswordFields] = useState(false);
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError(null);
+    setPasswordSuccess(null);
+
+    if (!currentPassword) {
+      setPasswordError("Veuillez saisir votre mot de passe actuel.");
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setPasswordError("Le nouveau mot de passe doit contenir au moins 6 caractères.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError("Les nouveaux mots de passe ne correspondent pas.");
+      return;
+    }
+
+    setIsUpdatingPassword(true);
+
+    try {
+      const user = auth.currentUser;
+      if (!user || !user.email) {
+        throw new Error("Aucun utilisateur connecté ou session expirée.");
+      }
+
+      // Reauthentifier l'utilisateur en premier pour éviter l'erreur de session expirée de Firebase
+      const credential = EmailAuthProvider.credential(user.email, currentPassword);
+      await reauthenticateWithCredential(user, credential);
+
+      // Mettre à jour le mot de passe
+      await updatePassword(user, newPassword);
+
+      setPasswordSuccess("Votre mot de passe a été modifié avec succès !");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err: any) {
+      console.error("Error updating password:", err);
+      if (err.code === "auth/invalid-credential" || err.code === "auth/wrong-password" || err.code === "auth/invalid-verification-code") {
+        setPasswordError("Le mot de passe actuel est incorrect.");
+      } else {
+        setPasswordError(err.message || "Impossible de modifier le mot de passe. Veuillez réessayer.");
+      }
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  };
 
   const presetAvatars = [
     { name: "La plume d'or", url: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=200" },
@@ -368,6 +435,89 @@ export default function MyProfile({ currentUserEmail, onProfileUpdated }: MyProf
                 <span>Ajouter</span>
               </button>
             </form>
+          </div>
+
+          {/* Sécurité et mot de passe */}
+          <div className="space-y-2.5 p-3.5 bg-white/5 border border-white/5 rounded-xl">
+            <button
+              type="button"
+              onClick={() => {
+                setShowPasswordFields(!showPasswordFields);
+                setPasswordError(null);
+                setPasswordSuccess(null);
+                setCurrentPassword("");
+                setNewPassword("");
+                setConfirmPassword("");
+              }}
+              className="flex items-center justify-between w-full text-[11px] font-mono text-[#C5A059] uppercase tracking-wider pb-1 border-b border-white/5 text-left cursor-pointer transition hover:text-[#B38F4B]"
+            >
+              <span className="flex items-center gap-1.5">
+                <Key className="w-3.5 h-3.5" />
+                Sécurité &amp; Mot de passe
+              </span>
+              <span className="text-[10px] text-slate-400 capitalize hover:text-white font-sans">
+                {showPasswordFields ? "Masquer ▲" : "Afficher ▼"}
+              </span>
+            </button>
+
+            {showPasswordFields && (
+              <div className="space-y-3 pt-2 text-xs animate-fade-in">
+                {passwordError && (
+                  <div className="p-2.5 rounded-lg bg-red-950/40 border border-red-500/30 text-red-400 text-[11px] text-center font-medium">
+                    {passwordError}
+                  </div>
+                )}
+                {passwordSuccess && (
+                  <div className="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 text-[11px] text-center flex items-center justify-center gap-1.5 font-medium">
+                    <span>{passwordSuccess}</span>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-mono uppercase text-slate-400">Mot de passe actuel</label>
+                    <input
+                      type="password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full bg-[#1A1A1A] border border-white/5 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-[#C5A059]/40"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-mono uppercase text-slate-400">Nouveau mot de passe</label>
+                    <input
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Min. 6 caractères"
+                      className="w-full bg-[#1A1A1A] border border-white/5 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-[#C5A059]/40"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-mono uppercase text-slate-400">Confirmer le nouveau</label>
+                    <input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full bg-[#1A1A1A] border border-white/5 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-[#C5A059]/40"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="button"
+                    onClick={handlePasswordChange}
+                    disabled={isUpdatingPassword}
+                    className="px-3 py-1.5 bg-[#C5A059]/20 border border-[#C5A059]/40 hover:border-[#C5A059]/70 text-[#C5A059] hover:bg-[#C5A059]/30 text-[10px] font-bold font-mono uppercase rounded-lg transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    {isUpdatingPassword ? "Mise à jour..." : "Enregistrer le mot de passe"}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
