@@ -1,0 +1,8 @@
+{
+  "name": "atelier-litteraire",
+  "description": "Une plateforme d'ecriture pour poetes et ecrivains avec assistant d'analyse IA, gestion de versions, statistiques uniques, et sauvegarde automatique.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

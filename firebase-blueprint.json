@@ -1,0 +1,121 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Information about a registered user account",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "penName": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "isGoogleUser": { "type": "boolean" }
+      },
+      "required": ["email", "displayName"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Public artist profile visible in the community page",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "penName": { "type": "string" },
+        "bio": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "publishedWorks": {
+          "type": "array"
+        },
+        "socials": {
+          "type": "object"
+        }
+      },
+      "required": ["email", "displayName", "penName"]
+    },
+    "Writing": {
+      "title": "Writing",
+      "description": "User manuscripts written in the editor",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "themes": { "type": "array" },
+        "emotions": { "type": "array" },
+        "userEmail": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "deadlineDate": { "type": "string" },
+        "deadlineWordCount": { "type": "integer" },
+        "comments": { "type": "array" }
+      },
+      "required": ["id", "title", "content", "userEmail"]
+    },
+    "Version": {
+      "title": "Version",
+      "description": "Autosaved/manually saved revisions of user writings",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "writingId": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "savedAt": { "type": "string", "format": "date-time" },
+        "label": { "type": "string" },
+        "type": { "type": "string", "enum": ["auto", "manual"] }
+      },
+      "required": ["id", "writingId", "content", "savedAt"]
+    },
+    "ProductivityDay": {
+      "title": "ProductivityDay",
+      "description": "Milestones and duration metrics for productivity visualizers",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string" },
+        "wordsWritten": { "type": "integer" },
+        "minutesSpent": { "type": "integer" },
+        "userEmail": { "type": "string" }
+      },
+      "required": ["date", "wordsWritten", "minutesSpent", "userEmail"]
+    },
+    "PrivateMessage": {
+      "title": "PrivateMessage",
+      "description": "Direct private message between two user authors",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "senderEmail": { "type": "string", "format": "email" },
+        "receiverEmail": { "type": "string", "format": "email" },
+        "content": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "senderEmail", "receiverEmail", "content", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Collection storing user registrations by their UIDs"
+    },
+    "/profiles/{profileId}": {
+      "schema": "UserProfile",
+      "description": "Collection storing user profiles keyed by normalized email"
+    },
+    "/writings/{writingId}": {
+      "schema": "Writing",
+      "description": "Draft documents keyed by manuscript ID"
+    },
+    "/versions/{versionId}": {
+      "schema": "Version",
+      "description": "Saving logs and revision states of writings"
+    },
+    "/productivity/{dayId}": {
+      "schema": "ProductivityDay",
+      "description": "Productivity days tracking graphs"
+    },
+    "/messages/{messageId}": {
+      "schema": "PrivateMessage",
+      "description": "Instant direct messaging logs between authors"
+    }
+  }
+}
