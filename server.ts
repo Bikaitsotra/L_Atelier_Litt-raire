@@ -48,6 +48,36 @@ const ai = apiKey && apiKey !== "MY_GEMINI_API_KEY" && apiKey.trim() !== ""
     })
   : null;
 
+// Get dynamic AI client based on user's custom API key or default fallback
+async function getAIClientForUser(userEmail?: string): Promise<GoogleGenAI | null> {
+  if (userEmail && userEmail.trim().length > 0) {
+    try {
+      const normalizedEmail = userEmail.trim().toLowerCase();
+      const profileDoc = await db.collection("profiles").doc(normalizedEmail).get();
+      if (profileDoc.exists) {
+        const data = profileDoc.data();
+        if (data && data.geminiApiKey && data.geminiApiKey.trim().length > 0) {
+          const userKey = data.geminiApiKey.trim();
+          console.log(`[AI Client] Using custom Gemini API key for user: ${normalizedEmail}`);
+          return new GoogleGenAI({
+            apiKey: userKey,
+            httpOptions: {
+              headers: {
+                "User-Agent": "aistudio-build-custom",
+              },
+            },
+          });
+        }
+      }
+    } catch (err) {
+      console.error(`[AI Client] Failed to fetch custom Gemini API key for user: ${userEmail}`, err);
+    }
+  }
+
+  // Fallback to default central AI client
+  return ai;
+}
+
 // Retry utility with backoff for API calls
 async function retryWithBackoff<T>(fn: () => Promise<T>, retries = 3, delay = 1200): Promise<T> {
   try {
@@ -1079,13 +1109,15 @@ app.post("/api/productivity", async (req, res) => {
 // Gemini endpoints preserved exactly for creative workspace assistance
 // Gemini-powered text styling analytics
 app.post("/api/ai/analyze", async (req, res) => {
-  const { title, content } = req.body;
+  const { title, content, userEmail } = req.body;
 
   if (!content || content.trim().length === 0) {
     return res.status(400).json({ error: "Le contenu est vide." });
   }
 
-  if (!ai) {
+  const activeAi = await getAIClientForUser(userEmail);
+
+  if (!activeAi) {
     console.warn("GEMINI_API_KEY non configurée. Utilisation de l'analyse locale simulée.");
     const words = content.trim().split(/\s+/).length;
     const chars = content.length;
@@ -1145,7 +1177,7 @@ Renvoie UNIQUEMENT le JSON sous cette structure exacte :
 }`;
 
     const response = await retryWithBackoff(() =>
-      ai.models.generateContent({
+      activeAi.models.generateContent({
         model: "gemini-3.5-flash",
         contents: analysisPrompt,
         config: {
@@ -1247,9 +1279,11 @@ Renvoie UNIQUEMENT le JSON sous cette structure exacte :
 
 // Interactive Teammate Companion endpoint
 app.post("/api/ai/chat", async (req, res) => {
-  const { messages, documentTitle, documentContent } = req.body;
+  const { messages, documentTitle, documentContent, userEmail } = req.body;
 
-  if (!ai) {
+  const activeAi = await getAIClientForUser(userEmail);
+
+  if (!activeAi) {
     const isPlaceholder = process.env.GEMINI_API_KEY === "MY_GEMINI_API_KEY";
     const missingReason = isPlaceholder 
       ? "votre clé GEMINI_API_KEY est configurée avec la valeur d'exemple par défaut ('MY_GEMINI_API_KEY')"
@@ -1281,7 +1315,7 @@ Parle toujours en français, avec un ton bienveillant et élégant. Garde tes in
     const lastUserMessage = messages[messages.length - 1];
     
     const response = await retryWithBackoff(() => 
-      ai.models.generateContent({
+      activeAi.models.generateContent({
         model: "gemini-3.5-flash",
         contents: [
           ...formattedHistory.slice(0, -1),
@@ -1313,19 +1347,21 @@ Parle toujours en français, avec un ton bienveillant et élégant. Garde tes in
 
 // Endpoint to generate a poetic title based on content
 app.post("/api/ai/generate-title", async (req, res) => {
-  const { content } = req.body;
+  const { content, userEmail } = req.body;
 
   if (!content || content.trim().length === 0) {
     return res.json({ title: "Un Songe Silencieux" });
   }
 
-  if (!ai) {
+  const activeAi = await getAIClientForUser(userEmail);
+
+  if (!activeAi) {
     return res.json({ title: "Sérénité d'un Instant" });
   }
 
   try {
     const response = await retryWithBackoff(() =>
-      ai.models.generateContent({
+      activeAi.models.generateContent({
         model: "gemini-3.5-flash",
         contents: `Voici un texte poétique / littéraire :\n\n${content}\n\nSuggère un titre magnifique, court, profond et extrêmement poétique en français pour cette œuvre. Renvoie uniquement le titre suggéré, sans guillemets, sans fioritures ni explications.`,
         config: {
@@ -1344,9 +1380,11 @@ app.post("/api/ai/generate-title", async (req, res) => {
 
 // Endpoint to generate a continuation of the writing
 app.post("/api/ai/write-continuation", async (req, res) => {
-  const { title, content } = req.body;
+  const { title, content, userEmail } = req.body;
 
-  if (!ai) {
+  const activeAi = await getAIClientForUser(userEmail);
+
+  if (!activeAi) {
     return res.json({
       continuation: "\n\n(Le murmure du vent s'élève à nouveau,\nL'encre espère le retour du jour nouveau,\nQuand la muse guidera l'esprit de sa plume.)"
     });
@@ -1361,7 +1399,7 @@ ${content || "Écrivez vos vers ou prose ici..."}
 Poursuis l'écriture de cette œuvre. Écris la suite logique, harmonieuse et inspirée de ce texte (environ 1 ou 2 strophes sublimes si c'est de la poésie, ou un paragraphe élégant si c'est de la prose). Conserve exactement le même style de langage, le rythme, les rimes et le ton. Renvoie uniquement le texte de la suite suggérée, sans préambule ni explications, en commençant directement par la suite.`;
 
     const response = await retryWithBackoff(() =>
-      ai.models.generateContent({
+      activeAi.models.generateContent({
         model: "gemini-3.5-flash",
         contents: prompt,
         config: {

@@ -36,6 +36,7 @@ interface EditorProps {
   zenMode: boolean;
   setZenMode: (zm: boolean) => void;
   isAnyDrawerOpen?: boolean;
+  currentUserEmail?: string;
 }
 
 export default function Editor({
@@ -47,7 +48,8 @@ export default function Editor({
   onAskAI,
   zenMode,
   setZenMode,
-  isAnyDrawerOpen = false
+  isAnyDrawerOpen = false,
+  currentUserEmail
 }: EditorProps) {
   const [serifFont, setSerifFont] = useState(true);
   const [fontSize, setFontSize] = useState("text-xl"); // text-lg, text-xl, text-2xl
@@ -81,7 +83,10 @@ export default function Editor({
       const response = await fetch("/api/ai/generate-title", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: writing?.content || "" })
+        body: JSON.stringify({ 
+          content: writing?.content || "",
+          userEmail: currentUserEmail
+        })
       });
       if (response.ok) {
         const data = await response.json();
@@ -109,7 +114,8 @@ export default function Editor({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: writing?.title || "",
-          content: writing?.content || ""
+          content: writing?.content || "",
+          userEmail: currentUserEmail
         })
       });
       if (response.ok) {

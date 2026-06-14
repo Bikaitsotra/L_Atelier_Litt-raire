@@ -54,6 +54,7 @@ export default function MyProfile({ currentUserEmail, onProfileUpdated }: MyProf
     website: ""
   });
   const [editPublishedWorks, setEditPublishedWorks] = useState<PublishedWork[]>([]);
+  const [editGeminiApiKey, setEditGeminiApiKey] = useState("");
   
   // Local state for adding a single published work
   const [numWorkTitle, setNumWorkTitle] = useState("");
@@ -172,6 +173,7 @@ export default function MyProfile({ currentUserEmail, onProfileUpdated }: MyProf
       website: profile.socials?.website || ""
     });
     setEditPublishedWorks(profile.publishedWorks || []);
+    setEditGeminiApiKey(profile.geminiApiKey || "");
     setIsEditing(true);
   };
 
@@ -212,7 +214,8 @@ export default function MyProfile({ currentUserEmail, onProfileUpdated }: MyProf
         linkedin: editSocials.linkedin.trim() || undefined,
         instagram: editSocials.instagram.trim() || undefined,
         website: editSocials.website.trim() || undefined
-      }
+      },
+      geminiApiKey: editGeminiApiKey.trim() || undefined
     };
 
     try {
@@ -435,6 +438,29 @@ export default function MyProfile({ currentUserEmail, onProfileUpdated }: MyProf
                 <span>Ajouter</span>
               </button>
             </form>
+          </div>
+
+          {/* Configuration Gemini Personnelle */}
+          <div className="space-y-2.5 p-3.5 bg-white/5 border border-white/5 rounded-xl">
+            <span className="flex items-center gap-1.5 text-[11px] font-mono text-[#C5A059] uppercase tracking-wider pb-1 border-b border-white/5">
+              <Sparkles className="w-3.5 h-3.5 text-[#C5A059]" />
+              Intelligence Artificielle - Plume
+            </span>
+            <div className="space-y-2 pt-1 text-xs">
+              <div className="space-y-1">
+                <label className="text-[10px] font-mono uppercase text-[#C5A059]">Votre Clé API Gemini (Optionnelle)</label>
+                <input
+                  type="password"
+                  value={editGeminiApiKey}
+                  onChange={(e) => setEditGeminiApiKey(e.target.value)}
+                  placeholder="Laisser vide pour utiliser la clé globale de l'Atelier (BFF)"
+                  className="w-full bg-[#1A1A1A] border border-white/5 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-[#C5A059]/40"
+                />
+              </div>
+              <p className="text-[10px] text-slate-400 leading-relaxed font-sans">
+                Renseignez votre propre clé d'API Google Gemini si vous souhaitez utiliser votre compte personnel. À défaut, l'Atelier utilisera la clé centrale de Plume configurée sur le serveur.
+              </p>
+            </div>
           </div>
 
           {/* Sécurité et mot de passe */}

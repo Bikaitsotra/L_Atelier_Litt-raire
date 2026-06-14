@@ -603,7 +603,8 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: target.title,
-          content: target.content
+          content: target.content,
+          userEmail: userEmail
         })
       });
 
@@ -976,6 +977,7 @@ export default function App() {
               zenMode={zenMode}
               setZenMode={setZenMode}
               isAnyDrawerOpen={isAnyDrawerOpen}
+              currentUserEmail={userEmail}
             />
           ) : activeTab === "stats" ? (
             <div className="max-w-4xl mx-auto p-6 space-y-4" id="stats_tab_canvas">
@@ -1054,6 +1056,7 @@ export default function App() {
         isOpen={isAIChatOpen}
         onClose={() => setIsAIChatOpen(false)}
         zenMode={zenMode}
+        currentUserEmail={userEmail}
       />
 
       {/* Private Messaging Panel */}

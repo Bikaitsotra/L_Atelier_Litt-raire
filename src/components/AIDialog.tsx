@@ -18,9 +18,10 @@ interface AIDialogProps {
   onClose: () => void;
   zenMode?: boolean;
   onUpdate?: (updated: Writing) => void;
+  currentUserEmail?: string;
 }
 
-export default function AIDialog({ writing, isOpen, onClose, zenMode = false, onUpdate }: AIDialogProps) {
+export default function AIDialog({ writing, isOpen, onClose, zenMode = false, onUpdate, currentUserEmail }: AIDialogProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
@@ -55,7 +56,8 @@ export default function AIDialog({ writing, isOpen, onClose, zenMode = false, on
         body: JSON.stringify({
           messages: newMessages,
           documentTitle: writing?.title || "Sans Titre",
-          documentContent: writing?.content || ""
+          documentContent: writing?.content || "",
+          userEmail: currentUserEmail
         })
       });
 

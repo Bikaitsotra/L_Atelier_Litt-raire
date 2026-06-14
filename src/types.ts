@@ -99,6 +99,7 @@ export interface UserProfile {
   socials: SocialConnections;
   isCurrentUser?: boolean;
   isRestricted?: boolean;
+  geminiApiKey?: string;
 }
 
 export interface PrivateMessage {
