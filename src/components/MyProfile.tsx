@@ -64,7 +64,7 @@ export default function MyProfile({ currentUserEmail, onProfileUpdated }: MyProf
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<React.ReactNode | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [showPasswordFields, setShowPasswordFields] = useState(false);
@@ -112,6 +112,23 @@ export default function MyProfile({ currentUserEmail, onProfileUpdated }: MyProf
       console.error("Error updating password:", err);
       if (err.code === "auth/invalid-credential" || err.code === "auth/wrong-password" || err.code === "auth/invalid-verification-code") {
         setPasswordError("Le mot de passe actuel est incorrect.");
+      } else if (err.code === "auth/operation-not-allowed" || (err.message && err.message.includes("operation-not-allowed"))) {
+        setPasswordError(
+          <div className="text-left space-y-2 mt-1">
+            <p className="font-bold text-red-400">Action requise : Activer le fournisseur d'authentification</p>
+            <p className="text-slate-300 text-[10.5px] leading-relaxed">
+              Pour pouvoir modifier votre mot de passe, l'authentification par <strong>E-mail/Mot de passe</strong> doit être activée dans votre console Firebase de projet :
+            </p>
+            <div className="bg-[#1A1A1A] p-3 rounded-lg border border-white/5 space-y-2">
+              <ol className="list-decimal pl-4 text-slate-400 text-[10.5px] space-y-1">
+                <li>Rendez-vous sur la <a href="https://console.firebase.google.com/project/isometric-woods-0h7sp/authentication/providers" target="_blank" rel="noopener noreferrer" className="text-[#C5A059] font-semibold underline hover:text-[#B38F4B] inline-flex items-center gap-0.5">console de configuration Firebase <ExternalLink className="w-3 h-3 inline" /></a>.</li>
+                <li>Cliquez sur <strong>Ajouter un nouveau fournisseur</strong> (ou configurez le fournisseur existant).</li>
+                <li>Sélectionnez <strong>Adresse e-mail/Mot de passe</strong>, activez l'interrupteur d'activation, puis cliquez sur <strong>Enregistrer</strong>.</li>
+              </ol>
+            </div>
+            <p className="text-[10px] text-slate-400">Une fois activé, vous pourrez mettre à jour vos identifiants d'accès instantanément depuis cet écran sans aucune restriction.</p>
+          </div>
+        );
       } else {
         setPasswordError(err.message || "Impossible de modifier le mot de passe. Veuillez réessayer.");
       }

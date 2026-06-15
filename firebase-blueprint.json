@@ -28,6 +28,9 @@
         },
         "socials": {
           "type": "object"
+        },
+        "geminiApiKey": {
+          "type": "string"
         }
       },
       "required": ["email", "displayName", "penName"]

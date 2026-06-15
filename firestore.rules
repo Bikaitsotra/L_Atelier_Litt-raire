@@ -54,7 +54,8 @@ service cloud.firestore {
         && data.displayName is string && data.displayName.size() > 0 && data.displayName.size() <= 100
         && data.penName is string && data.penName.size() > 0 && data.penName.size() <= 100
         && data.bio is string && data.bio.size() <= 1000
-        && data.avatarUrl is string && data.avatarUrl.size() <= 1000;
+        && data.avatarUrl is string && data.avatarUrl.size() <= 1000
+        && (!data.keys().hasAny(['geminiApiKey']) || (data.geminiApiKey is string && data.geminiApiKey.size() <= 150));
     }
 
     // Entity Validation - Writings collection

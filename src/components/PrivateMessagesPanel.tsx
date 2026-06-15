@@ -8,7 +8,7 @@ import { MessageSquare, Send, X, User, ChevronDown, CheckCheck, Landmark } from 
 import { PrivateMessage, UserProfile } from "../types";
 import { saveMessageToFirestore, getProfilesFromFirestore } from "../lib/firestoreService";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
-import { db } from "../firebase";
+import { db, auth } from "../firebase";
 
 interface PrivateMessagesPanelProps {
   currentUserEmail: string;
@@ -50,53 +50,23 @@ export default function PrivateMessagesPanel({
   useEffect(() => {
     if (!currentUserEmail || !isOpen) return;
 
-    const qSent = query(
-      collection(db, "messages"),
-      where("senderEmail", "==", currentUserEmail.trim().toLowerCase())
-    );
-    const qReceived = query(
-      collection(db, "messages"),
-      where("receiverEmail", "==", currentUserEmail.trim().toLowerCase())
-    );
-
-    let sentMsgs: PrivateMessage[] = [];
-    let receivedMsgs: PrivateMessage[] = [];
-
-    const updateMerged = () => {
-      const merged = [...sentMsgs, ...receivedMsgs];
-      // Deduplicate by unique document id
-      const unique = Array.from(new Map(merged.map(m => [m.id, m])).values());
-      // Sort oldest to newest
-      unique.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-      setMessages(unique);
+    const fetchMsgs = async () => {
+      try {
+        const res = await fetch(`/api/messages?email=${encodeURIComponent(currentUserEmail)}`);
+        if (res.ok) {
+          const data: PrivateMessage[] = await res.json();
+          // Sort oldest to newest
+          const sorted = [...data].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+          setMessages(sorted);
+        }
+      } catch (e) {
+        console.error("Error polling messages from BFF:", e);
+      }
     };
-
-    const unsubSent = onSnapshot(qSent, (snapshot) => {
-      const msgs: PrivateMessage[] = [];
-      snapshot.forEach(doc => {
-        msgs.push(doc.data() as PrivateMessage);
-      });
-      sentMsgs = msgs;
-      updateMerged();
-    }, (err) => {
-      console.error("Error subscribing to sent messages:", err);
-    });
-
-    const unsubReceived = onSnapshot(qReceived, (snapshot) => {
-      const msgs: PrivateMessage[] = [];
-      snapshot.forEach(doc => {
-        msgs.push(doc.data() as PrivateMessage);
-      });
-      receivedMsgs = msgs;
-      updateMerged();
-    }, (err) => {
-      console.error("Error subscribing to received messages:", err);
-    });
-
-    return () => {
-      unsubSent();
-      unsubReceived();
-    };
+    
+    fetchMsgs();
+    const interval = setInterval(fetchMsgs, 4000);
+    return () => clearInterval(interval);
   }, [currentUserEmail, isOpen]);
 
   // Derive conversation list from messages history
@@ -181,6 +151,11 @@ export default function PrivateMessagesPanel({
     try {
       await saveMessageToFirestore(newMessage);
       setInputText("");
+      setMessages(prev => {
+        // Prevent duplicate if any
+        if (prev.some(m => m.id === newMessage.id)) return prev;
+        return [...prev, newMessage];
+      });
     } catch (err) {
       console.error("Failed to transmit direct message:", err);
     } finally {

@@ -21,7 +21,9 @@ import {
   Calendar,
   Layers,
   ChevronDown,
-  FileDown
+  FileDown,
+  Users,
+  Trash2
 } from "lucide-react";
 import { Writing, Comment, Version } from "../types";
 import ExportMenu from "./ExportMenu";
@@ -56,8 +58,139 @@ export default function Editor({
   
   // Versions and settings states
   const [showHistory, setShowHistory] = useState(false);
+  const [showStoryOutline, setShowStoryOutline] = useState(false);
+  const [outlineSubTab, setOutlineSubTab] = useState<"chapters" | "characters" | "plot">("chapters");
   const [showGoalSettings, setShowGoalSettings] = useState(false);
   const [newVersionLabel, setNewVersionLabel] = useState("");
+
+  // Stories & Outline Actions
+  const handleAddChapter = () => {
+    const chapters = writing?.chapters || [];
+    const newChapter = {
+      id: "ch_" + Math.random().toString(36).substr(2, 9),
+      title: `Chapitre ${chapters.length + 1}`,
+      summary: "Décrivez en quelques mots l'intrigue clé de ce chapitre...",
+      completed: false
+    };
+    if (writing) {
+      onUpdate({
+        ...writing,
+        chapters: [...chapters, newChapter],
+        updatedAt: new Date().toISOString()
+      });
+    }
+  };
+
+  const handleToggleChapter = (chapterId: string) => {
+    if (!writing) return;
+    const chapters = (writing.chapters || []).map(ch => 
+      ch.id === chapterId ? { ...ch, completed: !ch.completed } : ch
+    );
+    onUpdate({
+      ...writing,
+      chapters,
+      updatedAt: new Date().toISOString()
+    });
+  };
+
+  const handleUpdateChapter = (chapterId: string, updatedFields: Partial<import("../types").StoryChapter>) => {
+    if (!writing) return;
+    const chapters = (writing.chapters || []).map(ch => 
+      ch.id === chapterId ? { ...ch, ...updatedFields } : ch
+    );
+    onUpdate({
+      ...writing,
+      chapters,
+      updatedAt: new Date().toISOString()
+    });
+  };
+
+  const handleRemoveChapter = (chapterId: string) => {
+    if (!writing) return;
+    const chapters = (writing.chapters || []).filter(ch => ch.id !== chapterId);
+    onUpdate({
+      ...writing,
+      chapters,
+      updatedAt: new Date().toISOString()
+    });
+  };
+
+  // Characters actions
+  const handleAddCharacter = () => {
+    if (!writing) return;
+    const characters = writing.characters || [];
+    const newChar = {
+      id: "char_" + Math.random().toString(36).substr(2, 9),
+      name: "Nouveau Personnage",
+      role: "Protagoniste",
+      description: "Description physique ou de son rôle..."
+    };
+    onUpdate({
+      ...writing,
+      characters: [...characters, newChar],
+      updatedAt: new Date().toISOString()
+    });
+  };
+
+  const handleUpdateCharacter = (charId: string, updatedFields: Partial<import("../types").StoryCharacter>) => {
+    if (!writing) return;
+    const characters = (writing.characters || []).map(c => 
+      c.id === charId ? { ...c, ...updatedFields } : c
+    );
+    onUpdate({
+      ...writing,
+      characters,
+      updatedAt: new Date().toISOString()
+    });
+  };
+
+  const handleRemoveCharacter = (charId: string) => {
+    if (!writing) return;
+    const characters = (writing.characters || []).filter(c => c.id !== charId);
+    onUpdate({
+      ...writing,
+      characters,
+      updatedAt: new Date().toISOString()
+    });
+  };
+
+  // Plot Points actions
+  const handleAddPlotPoint = () => {
+    if (!writing) return;
+    const plotPoints = writing.plotPoints || [];
+    const newPlot = {
+      id: "plot_" + Math.random().toString(36).substr(2, 9),
+      title: "Nouveau Rebondissement",
+      description: "Description de l'événement clé ou mystère..."
+    };
+    onUpdate({
+      ...writing,
+      plotPoints: [...plotPoints, newPlot],
+      updatedAt: new Date().toISOString()
+    });
+  };
+
+  const handleUpdatePlotPoint = (plotId: string, updatedFields: Partial<import("../types").StoryPlotPoint>) => {
+    if (!writing) return;
+    const plotPoints = (writing.plotPoints || []).map(p => 
+      p.id === plotId ? { ...p, ...updatedFields } : p
+    );
+    onUpdate({
+      ...writing,
+      plotPoints,
+      updatedAt: new Date().toISOString()
+    });
+  };
+
+  const handleRemovePlotPoint = (plotId: string) => {
+    if (!writing) return;
+    const plotPoints = (writing.plotPoints || []).filter(p => p.id !== plotId);
+    onUpdate({
+      ...writing,
+      plotPoints,
+      updatedAt: new Date().toISOString()
+    });
+  };
   
   // Commenting features
   const [commentText, setCommentText] = useState("");
@@ -358,7 +491,10 @@ export default function Editor({
         {/* Versions tracker dropdown trigger */}
         <button
           id="versions_history_btn"
-          onClick={() => setShowHistory(!showHistory)}
+          onClick={() => {
+            setShowHistory(!showHistory);
+            setShowStoryOutline(false);
+          }}
           className={`flex items-center gap-1 font-medium transition cursor-pointer ${
             zenMode 
               ? "px-2 py-1.5 sm:px-3 text-xs border border-white/10 rounded-lg" 
@@ -376,7 +512,10 @@ export default function Editor({
         {/* Comments toggle trigger */}
         <button
           id="comments_toggle_btn"
-          onClick={() => setShowComments(!showComments)}
+          onClick={() => {
+            setShowComments(!showComments);
+            setShowStoryOutline(false);
+          }}
           className={`flex items-center gap-1 font-medium transition cursor-pointer ${
             zenMode 
               ? "px-2 py-1.5 sm:px-3 text-xs border border-white/10 rounded-lg" 
@@ -393,6 +532,27 @@ export default function Editor({
             <span className="text-[10px] font-mono tracking-wider text-[#C5A059]">{writing.comments.length}</span>
           )}
         </button>
+
+        {/* Story Outline/Plot and Character Planner button (active if type === "roman" or "nouvelle") */}
+        {((writing.type || "poeme") === "roman" || (writing.type || "poeme") === "nouvelle") && (
+          <button
+            id="story_outline_toggle_btn"
+            onClick={() => {
+              setShowStoryOutline(!showStoryOutline);
+              setShowHistory(false);
+              setShowComments(false);
+            }}
+            className={`flex items-center gap-1 font-medium transition cursor-pointer px-2 py-1.5 sm:px-3 text-xs border border-white/10 rounded-lg ${
+              showStoryOutline
+                ? "bg-[#C5A059]/10 text-[#C5A059] border-[#C5A059]/40"
+                : "bg-[#1A1A1A] text-[#E0D7D0] border-white/5 hover:bg-white/5"
+            }`}
+            title="Activer la structure narrative (Chapitres, Personnages et Plan de Roman)"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-[#C5A059]" />
+            <span className="hidden lg:inline">Plan & Chapitres</span>
+          </button>
+        )}
 
         {/* Objective Setter trigger */}
         <button
@@ -515,6 +675,51 @@ export default function Editor({
             </button>
           </div>
 
+          {/* Genres indicators / selection */}
+          {!zenMode && (
+            <div className="px-6 pb-3 border-b border-white/5 flex flex-wrap items-center gap-1.5 text-[10px] font-mono no-print bg-black/10">
+              <span className="text-[#E0D7D0]/40 uppercase tracking-wider mr-1.5">Format littéraire :</span>
+              {[
+                { key: "poeme", label: "Poème", icon: "✍️" },
+                { key: "roman", label: "Roman / Épopée", icon: "📚" },
+                { key: "nouvelle", label: "Nouvelle / Conte", icon: "📖" },
+                { key: "autre", label: "Prose / Autre", icon: "📝" }
+              ].map((g) => {
+                const isSelected = (writing?.type || "poeme") === g.key;
+                return (
+                  <button
+                    key={g.key}
+                    onClick={() => {
+                      if (!writing) return;
+                      const nextWriting = {
+                        ...writing,
+                        type: g.key as "poeme" | "roman" | "nouvelle" | "autre",
+                        chapters: (g.key === "roman" || g.key === "nouvelle") && !(writing.chapters && writing.chapters.length > 0) ? [
+                          { id: "ch_1", title: "Plan : Chapitre 1", summary: "Introduction du protagoniste dans son milieu d'origine.", completed: false }
+                        ] : writing.chapters || [],
+                        characters: (g.key === "roman" || g.key === "nouvelle") && !(writing.characters && writing.characters.length > 0) ? [
+                          { id: "char_1", name: "Protagoniste principal", role: "Héros", description: "Personnage principal." }
+                        ] : writing.characters || [],
+                        plotPoints: (g.key === "roman" || g.key === "nouvelle") && !(writing.plotPoints && writing.plotPoints.length > 0) ? [
+                          { id: "plot_1", title: "L'Incident perturbateur", description: "Un événement imprévu." }
+                        ] : writing.plotPoints || []
+                      };
+                      onUpdate(nextWriting);
+                    }}
+                    className={`px-2 py-0.5 rounded-md border transition cursor-pointer flex items-center gap-1 ${
+                      isSelected
+                        ? "bg-[#C5A059]/10 border-[#C5A059]/30 text-[#C5A059] font-bold"
+                        : "bg-[#1A1A1A] border-white/5 text-[#E0D7D0]/50 hover:bg-white/10"
+                    }`}
+                  >
+                    <span>{g.icon}</span>
+                    <span>{g.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {/* Typewriter text editor block */}
           <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${
             zenMode ? "p-3 sm:p-4" : "p-6"
@@ -608,10 +813,233 @@ export default function Editor({
           </div>
         )}
 
-        {/* Sidebar panels for Version history & Inline comments */}
-        {(showHistory || showComments) && !zenMode && (
+        {/* Sidebar panels for Version history, Inline comments, and Story outlines */}
+        {(showHistory || showComments || showStoryOutline) && !zenMode && (
           <div className="w-80 max-w-full lg:relative absolute right-0 top-0 h-full z-20 bg-[#0D0D0D] border-l border-white/10 flex flex-col no-print" id="editorial_right_drawers">
             
+            {/* Story Outline Planner Drawer */}
+            {showStoryOutline && (
+              <div className="flex flex-col flex-1 min-h-0" id="story_outline_drawer_panel">
+                <div className="p-4 border-b border-white/10 flex items-center justify-between" id="outline_drawer_header">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded bg-[#C5A059]/10 flex items-center justify-center">
+                      <BookOpen className="w-3.5 h-3.5 text-[#C5A059]" />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-bold text-[#EAE6E1] font-mono uppercase tracking-wider font-semibold">Plan d'Écriture</h3>
+                      <span className="text-[9px] text-[#E0D7D0]/40 font-mono">Structure & Personnages</span>
+                    </div>
+                  </div>
+                  <button
+                    id="close_outline_panel"
+                    onClick={() => setShowStoryOutline(false)}
+                    className="p-1 text-slate-400 hover:text-slate-200 rounded-lg hover:bg-white/5 cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Sub-tabs selections */}
+                <div className="flex border-b border-white/10 text-[10px] font-mono text-center shrink-0">
+                  <button
+                    onClick={() => setOutlineSubTab("chapters")}
+                    className={`flex-1 py-2 border-b-2 transition cursor-pointer ${
+                      outlineSubTab === "chapters"
+                        ? "border-[#C5A059] text-[#C5A059] bg-[#C5A059]/5 font-bold"
+                        : "border-transparent text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    Chapitres
+                  </button>
+                  <button
+                    onClick={() => setOutlineSubTab("characters")}
+                    className={`flex-1 py-2 border-b-2 transition cursor-pointer ${
+                      outlineSubTab === "characters"
+                        ? "border-[#C5A059] text-[#C5A059] bg-[#C5A059]/5 font-bold"
+                        : "border-transparent text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    Personnages
+                  </button>
+                  <button
+                    onClick={() => setOutlineSubTab("plot")}
+                    className={`flex-1 py-2 border-b-2 transition cursor-pointer ${
+                      outlineSubTab === "plot"
+                        ? "border-[#C5A059] text-[#C5A059] bg-[#C5A059]/5 font-bold"
+                        : "border-transparent text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    Intrigue
+                  </button>
+                </div>
+
+                {/* Main Dynamic View Panels */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#0A0A0A]" id="outline_data_container">
+                  {outlineSubTab === "chapters" && (
+                    <div className="space-y-3" id="outline_chapters_view">
+                      <div className="flex items-center justify-between pb-1">
+                        <span className="text-[10px] font-mono uppercase text-[#E0D7D0]/40">Séquencier ({(writing?.chapters || []).length})</span>
+                        <button
+                          onClick={handleAddChapter}
+                          className="px-2 py-1 bg-[#C5A059]/10 hover:bg-[#C5A059]/20 text-[#C5A059] text-[9.5px] border border-[#C5A059]/20 hover:border-[#C5A059]/40 rounded-sm font-mono flex items-center gap-1 cursor-pointer transition"
+                        >
+                          <Plus className="w-2.5 h-2.5" />
+                          Nouveau Chapitre
+                        </button>
+                      </div>
+
+                      {!(writing?.chapters) || writing.chapters.length === 0 ? (
+                        <p className="text-[10.5px] text-slate-500 text-center py-6 italic">Aucun chapitre planifié. Établissez une structure claire.</p>
+                      ) : (
+                        writing.chapters.map((ch) => (
+                          <div key={ch.id} className="p-3 bg-[#111111]/90 border border-white/5 rounded-lg space-y-2 text-xs">
+                            <div className="flex items-center justify-between gap-2">
+                              <input
+                                type="text"
+                                value={ch.title}
+                                onChange={(e) => handleUpdateChapter(ch.id, { title: e.target.value })}
+                                className="bg-transparent text-white font-semibold outline-hidden focus:border-b border-[#C5A059]/40 font-serif w-full text-[12px]"
+                              />
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <button
+                                  onClick={() => handleToggleChapter(ch.id)}
+                                  className={`p-1 rounded-md border transition cursor-pointer flex items-center justify-center ${
+                                    ch.completed 
+                                      ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400" 
+                                      : "bg-white/5 border-white/10 text-slate-400 hover:text-white"
+                                  }`}
+                                  title={ch.completed ? "Marquer comme à rédiger" : "Marquer comme écrit"}
+                                >
+                                  <Check className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={() => handleRemoveChapter(ch.id)}
+                                  className="p-1 bg-white/5 border border-white/10 text-slate-400 hover:text-rose-400 hover:border-rose-400/30 rounded-md transition cursor-pointer"
+                                  title="Supprimer ce chapitre"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+
+                            <textarea
+                              value={ch.summary}
+                              onChange={(e) => handleUpdateChapter(ch.id, { summary: e.target.value })}
+                              placeholder="Synopsis de la scène ou événements clés..."
+                              className="w-full bg-[#181818] border border-white/5 rounded-md p-1.5 text-[10.5px] text-[#E0D7D0]/80 resize-none h-16 outline-hidden focus:border-[#C5A059]/20"
+                            />
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+
+                  {outlineSubTab === "characters" && (
+                    <div className="space-y-3" id="outline_characters_view">
+                      <div className="flex items-center justify-between pb-1">
+                        <span className="text-[10px] font-mono uppercase text-[#E0D7D0]/40">Fiches Personnages ({(writing?.characters || []).length})</span>
+                        <button
+                          onClick={handleAddCharacter}
+                          className="px-2 py-1 bg-[#C5A059]/10 hover:bg-[#C5A059]/20 text-[#C5A059] text-[9.5px] border border-[#C5A059]/20 hover:border-[#C5A059]/40 rounded-sm font-mono flex items-center gap-1 cursor-pointer transition"
+                        >
+                          <Plus className="w-2.5 h-2.5" />
+                          Nouveau Personnage
+                        </button>
+                      </div>
+
+                      {!(writing?.characters) || writing.characters.length === 0 ? (
+                        <p className="text-[10.5px] text-slate-500 text-center py-6 italic">Aucun personnage répertorié. Donnez vie à des figures marquantes.</p>
+                      ) : (
+                        writing.characters.map((c) => (
+                          <div key={c.id} className="p-3 bg-[#111111]/90 border border-white/5 rounded-lg space-y-2 text-xs">
+                            <div className="flex items-center justify-between gap-2">
+                              <input
+                                type="text"
+                                value={c.name}
+                                onChange={(e) => handleUpdateCharacter(c.id, { name: e.target.value })}
+                                className="bg-transparent text-white font-semibold outline-hidden focus:border-b border-[#C5A059]/40 font-serif w-full text-[12px]"
+                              />
+                              <button
+                                onClick={() => handleRemoveCharacter(c.id)}
+                                className="p-1 bg-white/5 border border-white/10 text-slate-400 hover:text-rose-400 hover:border-rose-400/30 rounded-md transition cursor-pointer shrink-0"
+                                title="Supprimer cette fiche"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+
+                            <div className="flex gap-1.5 items-center">
+                              <span className="text-[9px] font-mono text-[#C5A059] uppercase tracking-wider">Rôle :</span>
+                              <input
+                                type="text"
+                                value={c.role}
+                                placeholder="Protagoniste, Mentor, Ombre..."
+                                onChange={(e) => handleUpdateCharacter(c.id, { role: e.target.value })}
+                                className="bg-transparent text-[#E0D7D0]/80 h-4 underline decoration-[#C5A059]/30 outline-hidden text-[10.5px] w-full"
+                              />
+                            </div>
+
+                            <textarea
+                              value={c.description}
+                              onChange={(e) => handleUpdateCharacter(c.id, { description: e.target.value })}
+                              placeholder="Notes biographiques, motivations, secrets, traits caractéristiques..."
+                              className="w-full bg-[#181818] border border-white/5 rounded-md p-1.5 text-[10.5px] text-[#E0D7D0]/80 resize-none h-20 outline-hidden focus:border-[#C5A059]/20"
+                            />
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+
+                  {outlineSubTab === "plot" && (
+                    <div className="space-y-3" id="outline_plot_view">
+                      <div className="flex items-center justify-between pb-1">
+                        <span className="text-[10px] font-mono uppercase text-[#E0D7D0]/40">Fil Narratif ({(writing?.plotPoints || []).length})</span>
+                        <button
+                          onClick={handleAddPlotPoint}
+                          className="px-2 py-1 bg-[#C5A059]/10 hover:bg-[#C5A059]/20 text-[#C5A059] text-[9.5px] border border-[#C5A059]/20 hover:border-[#C5A059]/40 rounded-sm font-mono flex items-center gap-1 cursor-pointer transition"
+                        >
+                          <Plus className="w-2.5 h-2.5" />
+                          Nouveau Jalon
+                        </button>
+                      </div>
+
+                      {!(writing?.plotPoints) || writing.plotPoints.length === 0 ? (
+                        <p className="text-[10.5px] text-slate-500 text-center py-6 italic">Aucun fil d'intrigue ou jalon majeur défini.</p>
+                      ) : (
+                        writing.plotPoints.map((p) => (
+                          <div key={p.id} className="p-3 bg-[#111111]/90 border border-white/5 rounded-lg space-y-2 text-xs">
+                            <div className="flex items-center justify-between gap-2">
+                              <input
+                                type="text"
+                                value={p.title}
+                                onChange={(e) => handleUpdatePlotPoint(p.id, { title: e.target.value })}
+                                className="bg-transparent text-white font-semibold outline-hidden focus:border-b border-[#C5A059]/40 font-serif w-full text-[12px]"
+                              />
+                              <button
+                                onClick={() => handleRemovePlotPoint(p.id)}
+                                className="p-1 bg-white/5 border border-white/10 text-slate-400 hover:text-rose-400 hover:border-rose-400/30 rounded-md transition cursor-pointer shrink-0"
+                                title="Supprimer ce jalon"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+
+                            <textarea
+                              value={p.description}
+                              onChange={(e) => handleUpdatePlotPoint(p.id, { description: e.target.value })}
+                              placeholder="Comment s'amorce la crise, son crescendo, l'impact crucial..."
+                              className="w-full bg-[#181818] border border-white/5 rounded-md p-1.5 text-[10.5px] text-[#E0D7D0]/80 resize-none h-16 outline-hidden focus:border-[#C5A059]/20"
+                            />
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Version History Drawer */}
             {showHistory && (
               <div className={`flex flex-col min-h-0 ${showComments ? "h-1/2 border-b border-white/10" : "flex-1"}`} id="version_list_card">

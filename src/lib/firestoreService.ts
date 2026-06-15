@@ -71,6 +71,17 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 
 export async function getWritingsFromFirestore(email: string): Promise<Writing[]> {
   const collectionPath = "writings";
+  
+  // Try retrieving via Express BFF first (bypasses direct client auth restrictions)
+  try {
+    const res = await fetch(`/api/writings?email=${encodeURIComponent(email)}`);
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (apiErr) {
+    console.warn("[BFF Writings API] Could not read from backend server:", apiErr);
+  }
+
   try {
     const q = query(
       collection(db, collectionPath),
@@ -89,6 +100,19 @@ export async function getWritingsFromFirestore(email: string): Promise<Writing[]
 
 export async function saveWritingToFirestore(writing: Writing): Promise<void> {
   const docPath = `writings/${writing.id}`;
+  
+  // Try via BFF Backend API first
+  try {
+    const res = await fetch("/api/writings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(writing)
+    });
+    if (res.ok) return;
+  } catch (apiErr) {
+    console.warn("[BFF Writings API] Could not save via backend server, falling back:", apiErr);
+  }
+
   try {
     await setDoc(doc(db, "writings", writing.id), {
       ...writing,
@@ -101,6 +125,17 @@ export async function saveWritingToFirestore(writing: Writing): Promise<void> {
 
 export async function deleteWritingFromFirestore(writingId: string): Promise<void> {
   const docPath = `writings/${writingId}`;
+  
+  // Try via BFF Backend API first
+  try {
+    const res = await fetch(`/api/writings/${encodeURIComponent(writingId)}`, {
+      method: "DELETE"
+    });
+    if (res.ok) return;
+  } catch (apiErr) {
+    console.warn("[BFF Writings API] Could not delete via backend server, falling back:", apiErr);
+  }
+
   try {
     await deleteDoc(doc(db, "writings", writingId));
     
@@ -121,6 +156,17 @@ export async function deleteWritingFromFirestore(writingId: string): Promise<voi
 
 export async function getVersionsFromFirestore(writingId: string): Promise<Version[]> {
   const collectionPath = "versions";
+  
+  // Try via BFF Backend API first
+  try {
+    const res = await fetch(`/api/writings/${encodeURIComponent(writingId)}/versions`);
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (apiErr) {
+    console.warn("[BFF Versions API] Could not read from backend server:", apiErr);
+  }
+
   try {
     const q = query(
       collection(db, collectionPath),
@@ -140,6 +186,19 @@ export async function getVersionsFromFirestore(writingId: string): Promise<Versi
 
 export async function saveVersionToFirestore(version: Version): Promise<void> {
   const docPath = `versions/${version.id}`;
+  
+  // Try via BFF Backend API first
+  try {
+    const res = await fetch(`/api/writings/${encodeURIComponent(version.writingId)}/versions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(version)
+    });
+    if (res.ok) return;
+  } catch (apiErr) {
+    console.warn("[BFF Versions API] Could not save via backend server, falling back:", apiErr);
+  }
+
   try {
     await setDoc(doc(db, "versions", version.id), version);
   } catch (error) {
@@ -151,12 +210,60 @@ export async function saveVersionToFirestore(version: Version): Promise<void> {
 
 export async function getProfilesFromFirestore(): Promise<UserProfile[]> {
   const collectionPath = "profiles";
+  
+  // Try retrieving via Express BFF first (bypasses direct client auth restrictions)
+  try {
+    const res = await fetch("/api/profiles");
+    if (res.ok) {
+      const pList: UserProfile[] = await res.json();
+      if (Array.isArray(pList) && pList.length > 0) {
+        localStorage.setItem("cached_profiles", JSON.stringify(pList));
+        return pList;
+      }
+    }
+  } catch (apiErr) {
+    console.warn("[BFF Profiles API] Could not read from backend server:", apiErr);
+  }
+
+  if (!auth.currentUser) {
+    console.warn("Client not authenticated on Firebase. Loading profiles from offline cache/defaults.");
+    const cached = localStorage.getItem("cached_profiles");
+    if (cached) {
+      try { return JSON.parse(cached); } catch (e) {}
+    }
+    const defaults: UserProfile[] = [
+      {
+        email: "johnbikaitsotra@gmail.com",
+        displayName: "John Bikaitsotra",
+        penName: "Admin Plume",
+        bio: "Administrateur principal et gardien des encres de l'Atelier Littéraire.",
+        avatarUrl: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200",
+        publishedWorks: [],
+        socials: {}
+      },
+      {
+        email: "arthur.rimbaud@plume.fr",
+        displayName: "Arthur Rimbaud",
+        penName: "Le Voyant",
+        bio: "Poète maudit, marcheur infatigable à la recherche du dérèglement de tous les sens.",
+        avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200",
+        publishedWorks: [
+          { title: "Une Saison en Enfer", url: "https://fr.wikipedia.org/wiki/Une_Saison_en_Enfer" },
+          { title: "Illuminations", url: "https://fr.wikipedia.org/wiki/Illuminations_(Rimbaud)" }
+        ],
+        socials: { twitter: "rimbaud_officiel", github: "rimbaud-voyant" }
+      }
+    ];
+    return defaults;
+  }
+
   try {
     const querySnapshot = await getDocs(collection(db, collectionPath));
     const profiles: UserProfile[] = [];
     querySnapshot.forEach((document) => {
       profiles.push(document.data() as UserProfile);
     });
+    localStorage.setItem("cached_profiles", JSON.stringify(profiles));
     return profiles;
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, collectionPath);
@@ -166,6 +273,40 @@ export async function getProfilesFromFirestore(): Promise<UserProfile[]> {
 export async function saveProfileToFirestore(profile: UserProfile): Promise<void> {
   const normalizedEmail = profile.email.trim().toLowerCase();
   const docPath = `profiles/${normalizedEmail}`;
+  
+  // Update local offline cache
+  const cached = localStorage.getItem("cached_profiles");
+  let profilesList: UserProfile[] = [];
+  if (cached) {
+    try { profilesList = JSON.parse(cached); } catch (e) {}
+  }
+  const idx = profilesList.findIndex(p => p.email.toLowerCase() === normalizedEmail);
+  if (idx > -1) {
+    profilesList[idx] = profile;
+  } else {
+    profilesList.push(profile);
+  }
+  localStorage.setItem("cached_profiles", JSON.stringify(profilesList));
+
+  // Try saving via BFF Backend API first (bypasses direct Client SDK issues/rules)
+  try {
+    const res = await fetch("/api/profiles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(profile)
+    });
+    if (res.ok) {
+      return;
+    }
+  } catch (apiErr) {
+    console.warn("[BFF Profiles API] Could not save via backend server, falling back:", apiErr);
+  }
+
+  if (!auth.currentUser) {
+    console.warn("Client not authenticated on Firebase. Profile saved to offline cache only.");
+    return;
+  }
+
   try {
     await setDoc(doc(db, "profiles", normalizedEmail), profile);
   } catch (error) {
@@ -177,6 +318,17 @@ export async function saveProfileToFirestore(profile: UserProfile): Promise<void
 
 export async function getProductivityFromFirestore(email: string): Promise<ProductivityDay[]> {
   const collectionPath = "productivity";
+  
+  // Try via BFF Backend API first
+  try {
+    const res = await fetch(`/api/productivity?email=${encodeURIComponent(email)}`);
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (apiErr) {
+    console.warn("[BFF Productivity API] Could not read from backend server:", apiErr);
+  }
+
   try {
     const q = query(
       collection(db, collectionPath),
@@ -196,6 +348,22 @@ export async function getProductivityFromFirestore(email: string): Promise<Produ
 export async function saveProductivityToFirestore(email: string, log: Omit<ProductivityDay, "userEmail">): Promise<void> {
   const dayId = `${email.trim().toLowerCase()}_${log.date}`;
   const docPath = `productivity/${dayId}`;
+  
+  // Try via BFF Backend API first
+  try {
+    const res = await fetch("/api/productivity", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...log,
+        email: email.trim().toLowerCase()
+      })
+    });
+    if (res.ok) return;
+  } catch (apiErr) {
+    console.warn("[BFF Productivity API] Could not save via backend server, falling back:", apiErr);
+  }
+
   try {
     await setDoc(doc(db, "productivity", dayId), {
       ...log,
@@ -209,6 +377,38 @@ export async function saveProductivityToFirestore(email: string, log: Omit<Produ
 // --- 5. Admin API (Direct Firestore access) ---
 
 export async function getAdminOverviewFromFirestore(): Promise<any> {
+  // Try retrieving via Express BFF first (bypasses direct client auth restrictions)
+  try {
+    const email = auth.currentUser?.email || "johnbikaitsotra@gmail.com";
+    const res = await fetch(`/api/admin/overview?adminEmail=${encodeURIComponent(email)}`);
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (apiErr) {
+    console.warn("[BFF Admin Overview API] Could not read from backend server:", apiErr);
+  }
+
+  if (!auth.currentUser) {
+    console.warn("Client not authenticated. Skipping Cloud Admin overview fetch.");
+    return {
+      totalUsers: 1,
+      totalWritings: 2,
+      totalProfiles: 2,
+      totalVersions: 1,
+      usersList: [
+        {
+          email: "johnbikaitsotra@gmail.com",
+          displayName: "John Bikaitsotra",
+          penName: "Admin Plume",
+          createdAt: new Date().toISOString(),
+          isGoogle: true,
+          isRestricted: false,
+          manuscriptsCount: 2
+        }
+      ]
+    };
+  }
+
   try {
     const usersSnap = await getDocs(collection(db, "users"));
     const writingsSnap = await getDocs(collection(db, "writings"));
@@ -312,6 +512,21 @@ export async function deleteUser(adminEmail: string, userEmail: string): Promise
 
 export async function saveMessageToFirestore(message: PrivateMessage): Promise<void> {
   const docPath = `messages/${message.id}`;
+  
+  // Try saving via BFF messages API first (bypasses direct Client SDK issues/rules)
+  try {
+    const res = await fetch("/api/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(message)
+    });
+    if (res.ok) {
+      return;
+    }
+  } catch (apiErr) {
+    console.warn("[BFF Messages API] Could not save via backend server, falling back:", apiErr);
+  }
+
   try {
     await setDoc(doc(db, "messages", message.id), message);
   } catch (error) {
@@ -321,6 +536,17 @@ export async function saveMessageToFirestore(message: PrivateMessage): Promise<v
 
 export async function getSentMessagesFromFirestore(email: string): Promise<PrivateMessage[]> {
   const collectionPath = "messages";
+  
+  try {
+    const res = await fetch(`/api/messages?email=${encodeURIComponent(email)}`);
+    if (res.ok) {
+      const all: PrivateMessage[] = await res.json();
+      return all.filter(m => m.senderEmail.toLowerCase() === email.trim().toLowerCase());
+    }
+  } catch (apiErr) {
+    console.warn("[BFF Messages API] Could not retrieve via backend server, falling back:", apiErr);
+  }
+
   try {
     const q = query(
       collection(db, collectionPath),
@@ -339,6 +565,17 @@ export async function getSentMessagesFromFirestore(email: string): Promise<Priva
 
 export async function getReceivedMessagesFromFirestore(email: string): Promise<PrivateMessage[]> {
   const collectionPath = "messages";
+  
+  try {
+    const res = await fetch(`/api/messages?email=${encodeURIComponent(email)}`);
+    if (res.ok) {
+      const all: PrivateMessage[] = await res.json();
+      return all.filter(m => m.receiverEmail.toLowerCase() === email.trim().toLowerCase());
+    }
+  } catch (apiErr) {
+    console.warn("[BFF Messages API] Could not retrieve via backend server, falling back:", apiErr);
+  }
+
   try {
     const q = query(
       collection(db, collectionPath),

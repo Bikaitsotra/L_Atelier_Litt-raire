@@ -29,6 +29,27 @@ export interface Version {
   type: "auto" | "manual";
 }
 
+export interface StoryChapter {
+  id: string;
+  title: string;
+  summary: string;
+  wordGoal?: number;
+  completed?: boolean;
+}
+
+export interface StoryCharacter {
+  id: string;
+  name: string;
+  role: string;
+  description: string;
+}
+
+export interface StoryPlotPoint {
+  id: string;
+  title: string;
+  description: string;
+}
+
 export interface Writing {
   id: string;
   title: string;
@@ -41,6 +62,10 @@ export interface Writing {
   deadlineWordCount: number | null;
   comments: Comment[];
   userEmail?: string;
+  type?: "poeme" | "roman" | "nouvelle" | "autre";
+  chapters?: StoryChapter[];
+  characters?: StoryCharacter[];
+  plotPoints?: StoryPlotPoint[];
 }
 
 export interface WritingGoal {

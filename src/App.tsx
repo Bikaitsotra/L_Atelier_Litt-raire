@@ -254,8 +254,8 @@ export default function App() {
     const targetEmail = emailToUse || userEmail;
     if (!targetEmail) return;
 
-    if (!auth.currentUser) {
-      console.warn("Client not authenticated on Firebase. Loading writings from offline storage.");
+    if (isOffline) {
+      console.warn("Client is offline. Loading writings from offline storage.");
       const cached = localStorage.getItem(`cached_writings_${targetEmail}`);
       if (cached) {
         const parsed = JSON.parse(cached);
@@ -310,8 +310,8 @@ export default function App() {
   };
 
   const fetchVersions = async (docId: string) => {
-    if (!auth.currentUser) {
-      console.warn("Client not authenticated. Skipping Cloud versions fetch.");
+    if (isOffline) {
+      console.warn("Client is offline. Skipping Cloud versions fetch.");
       return;
     }
     try {
@@ -327,8 +327,8 @@ export default function App() {
   const fetchProductivity = async () => {
     if (!userEmail) return;
 
-    if (!auth.currentUser) {
-      console.warn("Client not authenticated. Loading productivity logs from offline storage.");
+    if (isOffline) {
+      console.warn("Client is offline. Loading productivity logs from offline storage.");
       const cached = localStorage.getItem(`cached_productivity_${userEmail}`);
       if (cached) {
         setProductivity(JSON.parse(cached));
@@ -352,8 +352,8 @@ export default function App() {
 
   // Synchronise cached offline changes back to Firestore
   const triggerSyncOfflineQueue = async () => {
-    if (!auth.currentUser) {
-      console.warn("Client not authenticated. Postponing offline synchronization.");
+    if (isOffline || !userEmail) {
+      console.warn("Client offline or no user session. Postponing offline synchronization.");
       return;
     }
     setIsSyncing(true);
@@ -384,20 +384,53 @@ export default function App() {
   };
 
   // Create empty new manuscript
-  const handleNewWriting = async () => {
+  const handleNewWriting = async (type: "poeme" | "roman" | "nouvelle" | "autre" = "poeme") => {
     setIsSidebarOpen(false);
+    
+    let defaultTitle = "Nouveau Poème";
+    let defaultContent = "Dans le vent doux du soir,\nLes ombres dansent en silence...";
+    let defaultThemes = ["Poésie"];
+    let defaultEmotions = ["sérénité"];
+    
+    if (type === "roman") {
+      defaultTitle = "Nouveau Roman";
+      defaultContent = "Chapitre 1 : L'Éveil de l'Ombre\n\nL'obscurité s'étendait sur la façade du manoir. Une silhouette hâtive se glissa le long des grilles de fer forgé, serrant contre elle un mystérieux parchemin scellé d'un sceau d'or...";
+      defaultThemes = ["Roman", "Aventure"];
+      defaultEmotions = ["mystère"];
+    } else if (type === "nouvelle") {
+      defaultTitle = "Nouvelle Littéraire";
+      defaultContent = "C'était un mardi pluvieux. Le genre de journée où l'on regrette d'avoir choisi le chemin de traverse. Lucien s'arrêta brusquement devant la boutique d'antiquités...";
+      defaultThemes = ["Nouvelle", "Intrigant"];
+      defaultEmotions = ["nostalgie"];
+    } else if (type === "autre") {
+      defaultTitle = "Prose Libre / Essai";
+      defaultContent = "Réflexions libres sur le tumulte du temps présent et l'importance de préserver un espace de recueillement et de pure écriture...";
+      defaultThemes = ["Prose"];
+      defaultEmotions = ["sérénité"];
+    }
+
     const newDoc: Writing = {
       id: "doc_" + Math.random().toString(36).substr(2, 9),
-      title: "Nouveau Poème",
-      content: "Dans le vent doux du soir...",
-      themes: ["Poésie"],
-      emotions: ["sérénité"],
+      title: defaultTitle,
+      content: defaultContent,
+      themes: defaultThemes,
+      emotions: defaultEmotions,
+      type: type,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       deadlineDate: null,
       deadlineWordCount: null,
       comments: [],
-      userEmail: userEmail
+      userEmail: userEmail,
+      chapters: type === "roman" || type === "nouvelle" ? [
+        { id: "ch_1", title: "Plan : Chapitre 1", summary: "Introduction du protagoniste dans son milieu d'origine et incident déclencheur.", completed: false }
+      ] : [],
+      characters: type === "roman" || type === "nouvelle" ? [
+        { id: "char_1", name: "Protagoniste principal", role: "Héros / Héroïne", description: "Esprit vif, marqué par une quête d'idéal." }
+      ] : [],
+      plotPoints: type === "roman" || type === "nouvelle" ? [
+        { id: "plot_1", title: "L'Incident perturbateur", description: "Un événement imprévu vient briser la routine quotidienne du protagoniste." }
+      ] : []
     };
 
     setWritings(prev => [newDoc, ...prev]);
@@ -406,7 +439,7 @@ export default function App() {
 
     // Save locally and push to cloud
     localStorage.setItem(`offline_writing_${newDoc.id}`, JSON.stringify(newDoc));
-    if (!isOffline && auth.currentUser) {
+    if (!isOffline && userEmail) {
       try {
         await saveWritingToFirestore(newDoc);
         localStorage.removeItem(`offline_writing_${newDoc.id}`);
@@ -424,7 +457,7 @@ export default function App() {
       setVersions([]);
     }
 
-    if (!isOffline && auth.currentUser) {
+    if (!isOffline && userEmail) {
       try {
         await deleteWritingFromFirestore(id);
         fetchWritings();
@@ -468,7 +501,7 @@ export default function App() {
     localStorage.setItem(`cached_writings_${userEmail}`, JSON.stringify(writings.map(w => w.id === updated.id ? updated : w)));
 
     // Debounced or fast post call to update cloud
-    if (!isOffline && auth.currentUser) {
+    if (!isOffline && userEmail) {
       try {
         // Automatic versioning: save a historical copy to versions if content changes heavily
         if (activeDoc && activeDoc.content !== updated.content && Math.abs(activeDoc.content.length - updated.content.length) > 50) {
@@ -522,7 +555,7 @@ export default function App() {
       }
     });
 
-    if (!isOffline && auth.currentUser) {
+    if (!isOffline && userEmail) {
       try {
         await saveProductivityToFirestore(userEmail, updatedLog);
         localStorage.setItem(`cached_productivity_${userEmail}`, JSON.stringify(productivity));
@@ -548,7 +581,7 @@ export default function App() {
         type: "manual",
       };
       
-      if (!isOffline && auth.currentUser) {
+      if (!isOffline && userEmail) {
         await saveVersionToFirestore(newVersion);
         fetchVersions(activeDocId!);
       }
@@ -571,7 +604,7 @@ export default function App() {
           updatedAt: new Date().toISOString()
         };
         
-        if (!isOffline && auth.currentUser) {
+        if (!isOffline && userEmail) {
           await saveWritingToFirestore(updatedWriting);
         }
         setWritings(prev => prev.map(w => w.id === activeDocId ? updatedWriting : w));

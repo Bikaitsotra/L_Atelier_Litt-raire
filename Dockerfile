@@ -1,54 +1,66 @@
-# --- Étape de Build ---
+# ==========================================
+# Étape 1 : Build (builder)
+# ==========================================
 FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copie des fichiers de dépendances de package
+# Copie des fichiers de configuration des dépendances
 COPY package*.json ./
 
-# Installation de toutes les dépendances (recquises pour builder le frontend et compiler le backend)
-RUN npm ci
+# Utilisation d'un cache mount pour accélérer l'installation de toutes les dépendances
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci
 
-# Copie des fichiers de configuration TypeScript et Vite
+# Copie des configurations TypeScript and Vite
 COPY tsconfig.json vite.config.ts ./
 
-# Copie optionnelle des configurations Firebase utiles au build
+# Copie des configurations Firebase (si présentes dans l'environnement)
 COPY firebase-applet-config.json* ./
 COPY firebase-blueprint.json* ./
 
-# Copie du code source et des fichiers statiques
+# Copie de l'ensemble du code source de l'atelier littéraire
 COPY src/ ./src
 COPY assets/ ./assets
 COPY index.html ./
 COPY server.ts ./
 
-# Build des assets statiques (Vite) et compilation du serveur backend (esbuild)
+# Compilation de l'application (Vite + esbuild pour le serveur)
 RUN npm run build
 
-# --- Étape Finale de Production ---
-FROM node:20-alpine
+# ==========================================
+# Étape 2 : Production Runtime
+# ==========================================
+FROM node:20-alpine AS runner
 
 WORKDIR /app
 
-# Déclaration de l'environnement de production
+# Définition des variables d'environnement pour la production
 ENV NODE_ENV=production
 ENV PORT=3000
 
-# Copie des définitions de dépendance
-COPY package*.json ./
+# Création du dossier et attribution des droits au user non-root "node"
+RUN mkdir -p /app && chown -R node:node /app
 
-# Installation des dépendances de production uniquement (--omit=dev)
-RUN npm ci --omit=dev
+# On bascule sur l'utilisateur "node" pour des raisons de sécurité évidentes (non-root)
+USER node
 
-# Copie des bundles compilés issus de l'étape de Build
-COPY --from=builder /app/dist ./dist
+# Copie des fichiers de configuration des paquets avec les droits adéquats
+COPY --chown=node:node package*.json ./
 
-# Copie optionnelle des fichiers de config requis au runtime (par exemple firebase-applet-config.json)
-COPY --from=builder /app/firebase-applet-config.json* ./
-COPY --from=builder /app/firebase-blueprint.json* ./
+# Utilisation d'un cache mount pour accélérer l'installation des dépendances de production uniquement
+RUN --mount=type=cache,target=/home/node/.npm \
+    npm ci --omit=dev
 
-# Port d'écoute par défaut
+# Copie des fichiers compilés depuis l'environnement builder
+COPY --from=builder --chown=node:node /app/dist ./dist
+
+# Copie des fichiers optionnels utiles au runtime (Firebase Blueprint...)
+COPY --from=builder --chown=node:node /app/firebase-applet-config.json* ./
+COPY --from=builder --chown=node:node /app/firebase-blueprint.json* ./
+
+# Port d'écoute exposé pour l'ingress (Cloud Run)
 EXPOSE 3000
 
-# Lancement de l'application via le script de production
+# Commande de démarrage par défaut de l'Atelier
 CMD ["npm", "start"]

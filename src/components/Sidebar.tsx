@@ -26,7 +26,7 @@ interface SidebarProps {
   writings: Writing[];
   activeId: string | null;
   onSelect: (id: string) => void;
-  onNew: () => void;
+  onNew: (type?: "poeme" | "roman" | "nouvelle" | "autre") => void;
   onDelete: (id: string, e: React.MouseEvent) => void;
   userEmail?: string;
   isOffline: boolean;
@@ -50,6 +50,7 @@ export default function Sidebar({
   const [selectedEmotion, setSelectedEmotion] = useState<string | null>(null);
   const [driveConnected, setDriveConnected] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [showCreationMenu, setShowCreationMenu] = useState(false);
 
   const [isBrandCollapsed, setIsBrandCollapsed] = useState(false);
   const [isFiltersCollapsed, setIsFiltersCollapsed] = useState(false);
@@ -125,15 +126,64 @@ export default function Sidebar({
               </div>
             </div>
             
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0 relative">
               <button
                 id="new_manuscript_btn"
-                onClick={onNew}
+                onClick={() => setShowCreationMenu(!showCreationMenu)}
                 className="p-1.5 bg-[#C5A059] text-black hover:bg-[#B38F4B] rounded-lg shadow-sm transition active:scale-95 cursor-pointer flex items-center justify-center font-medium"
                 title="Créer un nouveau texte"
               >
                 <Plus className="w-4 h-4" />
               </button>
+
+              {showCreationMenu && (
+                <div className="absolute top-full right-0 mt-1.5 w-48 bg-[#141414] border border-[#C5A059]/30 rounded-lg shadow-xl py-1 z-50 text-xs font-sans">
+                  <div className="px-2.5 py-1 text-[9px] font-mono uppercase text-slate-500 border-b border-white/5">
+                    Structure de l'œuvre
+                  </div>
+                  <button
+                    onClick={() => {
+                      onNew("poeme");
+                      setShowCreationMenu(false);
+                    }}
+                    className="w-full text-left px-3 py-2 text-slate-300 hover:text-white hover:bg-white/5 flex items-center gap-2 cursor-pointer transition"
+                  >
+                    <span>✍️</span>
+                    <span>Poème Classique</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      onNew("roman");
+                      setShowCreationMenu(false);
+                    }}
+                    className="w-full text-left px-3 py-2 text-slate-300 hover:text-white hover:bg-white/5 flex items-center gap-2 cursor-pointer transition"
+                  >
+                    <span>📚</span>
+                    <span>Roman / Épopée</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      onNew("nouvelle");
+                      setShowCreationMenu(false);
+                    }}
+                    className="w-full text-left px-3 py-2 text-slate-300 hover:text-white hover:bg-white/5 flex items-center gap-2 cursor-pointer transition"
+                  >
+                    <span>📖</span>
+                    <span>Nouvelle / Conte</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      onNew("autre");
+                      setShowCreationMenu(false);
+                    }}
+                    className="w-full text-left px-3 py-2 text-slate-300 hover:text-white hover:bg-white/5 flex items-center gap-2 cursor-pointer transition"
+                  >
+                    <span>📝</span>
+                    <span>Prose Libre / Essai</span>
+                  </button>
+                </div>
+              )}
+
               <button
                 id="close_sidebar_mobile_btn"
                 onClick={onClose}
@@ -306,8 +356,11 @@ export default function Sidebar({
                     }`}
                   >
                     <div className="flex items-start justify-between pr-5">
-                      <h3 className="text-xs font-semibold text-[#EAE6E1] font-serif line-clamp-1">
-                        {w.title || "Document sans titre"}
+                      <h3 className="text-xs font-semibold text-[#EAE6E1] font-serif line-clamp-1 flex items-center gap-1">
+                        <span>
+                          {w.type === "roman" ? "📚" : w.type === "nouvelle" ? "📖" : w.type === "autre" ? "📝" : "✍️"}
+                        </span>
+                        <span>{w.title || "Document sans titre"}</span>
                       </h3>
                       <button
                         onClick={(e) => onDelete(w.id, e)}
