@@ -48,8 +48,8 @@ USER node
 # Copie des fichiers de configuration des paquets avec les droits adéquats
 COPY --chown=node:node package*.json ./
 
-# Utilisation d'un cache mount pour accélérer l'installation des dépendances de production uniquement avec les bons droits (uid/gid de node)
-RUN --mount=type=cache,target=/home/node/.npm,uid=1000,gid=1000 \
+# Utilisation d'un cache mount pour accélérer l'installation des dépendances de production uniquement
+RUN --mount=type=cache,target=/home/node/.npm \
     npm ci --omit=dev
 
 # Copie des fichiers compilés depuis l'environnement builder

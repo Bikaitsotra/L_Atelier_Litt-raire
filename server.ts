@@ -17,7 +17,7 @@ import { getAuth } from "firebase-admin/auth";
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
+const PORT = 3000;
 
 // Initialize Firebase Admin SDK using local applet configurations
 const configPath = path.join(process.cwd(), "firebase-applet-config.json");
